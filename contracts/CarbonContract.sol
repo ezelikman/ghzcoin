@@ -1,75 +1,63 @@
 pragma solidity ^0.4.18;
 
 contract CarbonContract {
-	struct verifier {
-		address source;
-		string condition;
-		bool approved;
-	}
 
-	struct crowdFund {
-		uint deadline;
-		uint fundSize;	// unclear whether a cap will be used to limit fund sizes
-		uint currentSize;
-		mapping(address => uint) contributions;
-		address[] contributors;
-		string[] conditions;	// unsure how to define conditions array vs verifiers array
-		uint[] verifiers;
-		address recipient;
-		bool granted;
-	}
-
-	mapping(uint => crowdFund) CrowdFunds;
-	mapping(uint => verifier) Verifiers;
+	mapping(uint=>mapping(address => bool)) approved; // Verifier decisions
+	
+	mapping (uint=>uint) deadline; // When the contract ends
+	mapping (uint=>uint) fundSize;  // Total money in fund
+	mapping (uint=>uint) currentSize;  // Current money in fund
+	mapping (uint=>address) recipient; //  Who has received money from the fund
+	mapping (uint=>bool) granted; // Whether the fund has ever successfully distributed money
+	mapping (uint=>address[]) contributors; // Who has contributed to the funct
+    mapping (uint=>mapping(address => uint)) contributions; // How much they've contributed to the fund
+	mapping (uint=>string) conditions; // Condition under which the fund pays
+	mapping(uint => address[]) verifiers; // List of verifiers of the contract
+	
 	uint numCrowdFunds;
 
-	function startCrowdFund(uint timeLimit, uint size, uint initialContribution, string[] conditions) public returns (uint crowdFundID) {
-		uint cfID = ++numCrowdFunds;
-		crowdFund c = CrowdFunds[cfID];
-		c.deadline = block.number + timeLimit;
-		c.fundSize = size;
-		c.currentSize = initialContribution;
-		c.contributions[msg.sender] = initialContribution;
-		c.contributors[c.contributors.length] = msg.sender;
+	function startCrowdFund(uint timeLimit, uint size, uint initialContribution, string conditions) public returns (uint crowdFundID) {
+		uint id = ++numCrowdFunds;
+		deadline[id] = block.number + timeLimit;
+		fundSize[id] = size;
+		currentSize[id] = initialContribution;
+		contributions[id][msg.sender] = initialContribution;
+		contributors[id].push(msg.sender);
 	}
 
-	function contributeToFund(uint id, uint contributorsHash) public returns (uint currentSize) {
-		crowdFund c = CrowdFunds[id];
-		if(c.currentSize >= c.fundSize) {
-			msg.sender.send(msg.value);
-			return c.currentSize;
+	function contributeToFund(uint id, uint contributorsHash) public returns (uint newSize) {
+		currentSize[id] += msg.value;
+		if(currentSize[id] >= fundSize[id]) {
+            fundSize[id] = currentSize[id];
 		}
-		c.currentSize += msg.value;
-		c.contributors[c.contributors.length] = msg.sender;
-		return c.currentSize;
+		contributors[id].push(msg.sender);
+		return newSize;
 	}
 
 	// TODO: add some mechanism for the fund to be verified by the "verifiers"
 
 	function resolveFund(uint id) public returns (address fundRecipient) {
-		crowdFund c = CrowdFunds[id];
-		c.granted = true;
-		for(uint i = 0; i < c.verifiers.length; i++) {
-			if(!Verifiers[c.verifiers[i]].approved) {
-				c.granted = false;
+		granted[id] = true;
+		for(uint i = 0; i < verifiers[id].length; i++) {
+			if(approved[id][verifiers[id][i]]) {
+				granted[id] = false;
 			}
 		}
 
-		if(!c.granted) {
+		if(!granted[id]) {
 			// send back all the contributions
-			for(uint j = 0; j < c.contributors.length; j++) {
-				c.contributors[j].send(c.contributions[c.contributors[j]]);
+			for(uint j = 0; j < contributors[id].length; j++) {
+				contributors[id][j].send(contributions[id][contributors[id][j]]);
 			}
 		}
 
 		else {
-			c.recipient.send(c.fundSize);
+			recipient[id].send(fundSize[id]);
 		}
 	}
 
 	function clean(uint id) private {
-		crowdFund c = CrowdFunds[id];
-		c.fundSize = 0;
-		c.currentSize = 0;
+		fundSize[id] = 0;
+		currentSize[id] = 0;
 	}
 }
