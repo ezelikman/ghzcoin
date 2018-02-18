@@ -12,7 +12,8 @@ contract CarbonContract {
 	mapping (uint=>address[]) contributors; // Who has contributed to the funct
     mapping (uint=>mapping(address => uint)) contributions; // How much they've contributed to the fund
 	mapping (uint=>string) conditions; // Condition under which the fund pays
-	mapping(uint => address[]) verifiers; // List of verifiers of the contract
+	mapping (uint => address[]) verifiers; // List of verifiers of the contract
+	mapping (uint => uint) verifierCount; // Counts verifiers
 	
 	uint numCrowdFunds;
 
@@ -25,26 +26,32 @@ contract CarbonContract {
 		contributors[id].push(msg.sender);
 	}
 
-	function contributeToFund(uint id, uint contributorsHash) public returns (uint newSize) {
+	function contributeToFund(uint id, uint contributorsHash) payable public returns (uint newSize)  {
 		currentSize[id] += msg.value;
-		if(currentSize[id] >= fundSize[id]) {
-            fundSize[id] = currentSize[id];
-		}
+        fundSize[id] += currentSize[id];
 		contributors[id].push(msg.sender);
+		contributions[id][msg.sender] += msg.value;
 		return newSize;
 	}
 
 	// TODO: add some mechanism for the fund to be verified by the "verifiers"
+	
+	function payToRecipients(uint id) public returns (bool amountPaid) {
+	    return amountPaid;
+	}
 
 	function resolveFund(uint id) public returns (address fundRecipient) {
-		granted[id] = true;
+	    uint verifiedCount = 0;
 		for(uint i = 0; i < verifiers[id].length; i++) {
 			if(approved[id][verifiers[id][i]]) {
-				granted[id] = false;
+			    verifiedCount++;
+			    if (verifiedCount > verifierCount[id]/2) {
+			        granted[id] = true;
+			    }
 			}
 		}
 
-		if(!granted[id]) {
+		if(block.number >= deadline[id] && !granted[id]) {
 			// send back all the contributions
 			for(uint j = 0; j < contributors[id].length; j++) {
 				contributors[id][j].send(contributions[id][contributors[id][j]]);
