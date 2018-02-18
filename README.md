@@ -1,1 +1,1 @@
-##GhzCoin: Emissions Trading Using Ethereum Smart Contracts
+## GhzCoin: Emissions Trading Using Ethereum Smart Contracts
